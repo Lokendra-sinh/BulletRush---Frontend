@@ -4,207 +4,105 @@ const socket = io("http://localhost:3000");
 
 const canvas = document.getElementById("aimingCanvas");
 const ctx = canvas.getContext("2d");
-let aimingLineLength = Math.max(canvas.width, canvas.height);
-let isMouseMoveListenerAdded = false;
-let mouseX,
-  mouseY = 0;
+const dpi = window.devicePixelRatio || 1;
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+ctx.scale(dpi, dpi);
 
-function handleResize() {
-  const logicalWidth = window.innerWidth;
-  const logicalHeight = window.innerHeight;
-
-  canvas.width = logicalWidth * window.devicePixelRatio;
-  canvas.height = logicalHeight * window.devicePixelRatio;
-
-  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-  animate();
-}
-
-document.addEventListener("resize", handleResize);
-let playersArray = [];
+const frontendPlayers = {};
+const frontendBullets = [];
 
 socket.on("connect", () => {
-  console.log("client connected: ", socket.id);
+  console.log("client is connected: ", socket.id);
 
   const player = {
     x: Math.floor(Math.random() * canvas.width),
     y: Math.floor(Math.random() * canvas.height),
-    bullets: [],
+    color: `hsl(${Math.random() * 360}, ${Math.random() * 100}%, ${Math.random() * 100}%)`,
+    radius: 20,
     mouseX: 500,
     mouseY: 500,
   };
-  socket.emit("playerConnected", player);
+  socket.emit("updateBackendPlayers", player);
 });
 
-socket.on("updatedPlayer", (updatedPlayer) => {
-  const index = playersArray.findIndex(
-    (player) => player.id === updatedPlayer.id
-  );
-  playersArray[index].x = updatedPlayer.x;
-  playersArray[index].y = updatedPlayer.y;
-  playersArray[index].bullets = updatedPlayer.bullets;
-  playersArray[index].mouseX = updatedPlayer.mouseX;
-  playersArray[index].mouseY = updatedPlayer.mouseY;
-});
-
-socket.on('shotPlayer', (shotPlayer) => {
-  shotPlayer.id === socket.id ? alert("you are shot") : {};
-  const shotPlayerIndex = playersArray.findIndex(player => player.id === shotPlayer.id);
-  playersArray.splice(shotPlayerIndex, 1);
+socket.on('updateFrontendPlayers', (backendPlayers) => {
+  for(const id in backendPlayers){
+    const backendPlayer = backendPlayers[id];
+    if(!frontendPlayers[id]){
+      frontendPlayers[id] = backendPlayer;
+    } else {
+      frontendPlayers[id].x = backendPlayer.x;
+      frontendPlayers[id].y = backendPlayer.y;
+    }
+  }
 })
 
-socket.on("playerConnected", (newPlayers) => {
-  playersArray.length = 0;
-  newPlayers.forEach((player) => {
-    playersArray.push(player);
-  });
-});
-
-socket.on("playerDisconnected", (playerId) => {
-  // Handle a player disconnection
-  const index = playersArray.findIndex((player) => player.id === playerId);
-  if (index !== -1) {
-    playersArray.splice(index, 1);
-  }
-});
-
 function animate() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  playersArray.forEach((player) => {
-    drawPlayer(player.x, player.y);
-    if(player.id === socket.id){
-      drawAimingLine(player.mouseX, player.mouseY, player.x, player.y);
-      handleBulletCollision(player);
-    }
-    drawBullets(player.bullets);
-  });
-
   requestAnimationFrame(animate);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  for(const id in frontendPlayers){
+    const player = frontendPlayers[id];
+    drawPlayer(player);
+  }
+
 }
 
-// Function to draw a player
-function drawPlayer(x, y) {
-  ctx.fillStyle = "white"; // Choose a color for the player
+animate();
+
+function drawPlayer({x, y, radius, color}) {
+  
   ctx.beginPath();
-  ctx.arc(x, y, 10, 0, 2 * Math.PI);
+  ctx.arc(x, y, radius, 0, 2 * Math.PI, false);
+  ctx.fillStyle = color; 
   ctx.fill();
   ctx.closePath();
 }
 
-function drawBullets(bulletsArray) {
-  bulletsArray.forEach((bullet, index) => {
-    const newBullet_X = bullet.x + 5 * Math.cos(bullet.angle);
-    const newBullet_Y = bullet.y + 5 * Math.sin(bullet.angle);
-
-    ctx.beginPath();
-    ctx.arc(newBullet_X, newBullet_Y, 5, 0, 2 * Math.PI);
-    ctx.fillStyle = "red";
-    ctx.fill();
-    ctx.closePath();
-
-    bullet.x = newBullet_X;
-    bullet.y = newBullet_Y;
-  });
+function drawBullets({x, y, radius, color}) {
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2, false);
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.closePath();
 }
 
-function handleBulletCollision(player){
-  player.bullets.forEach(bullet => {
-    playersArray.forEach((player, index) => {
-      const distance = Math.sqrt((bullet.x - player.x) ** 2 + (bullet.y - player.y) **2)
-      if(distance < 15){
-       playersArray.splice(index, 1);
-       socket.emit('removePlayer', player);
-       return;
-      } 
-    })
-  })
-}
-
-
-window.addEventListener("keydown", (event) => {
+canvas.addEventListener("keydown", (event) => {
   console.log("inside keydown event");
-  const currentPlayer = playersArray.find((player) => player.id === socket.id);
-  if (currentPlayer) {
+  const currentPlayer = frontendPlayers[socket.id];
+  if(!currentPlayer) return;
+
     switch (event.key) {
       case "ArrowUp":
-        currentPlayer.y -= 5;
+        socket.emit('keydown', 'ArrowUp')
         break;
 
       case "ArrowDown":
-        currentPlayer.y += 5;
+        socket.emit('keydown', 'ArrowDown')
         break;
 
       case "ArrowLeft":
-        currentPlayer.x -= 5;
+        socket.emit('keydown', 'ArrowLeft')
         break;
 
       case "ArrowRight":
-        currentPlayer.x += 5;
+        socket.emit('keydown', 'ArrowRight')
         break;
 
       default:
     }
 
-    socket.emit("updatePlayer", currentPlayer);
-  }
+
 });
 
-document.addEventListener("DOMContentLoaded", function () {
-  handleResize();
-  animate();
-});
-
-function drawAimingLine(mouseX, mouseY, playerX, playerY) {
-  const angle = Math.atan2(mouseY - playerY, mouseX - playerX);
-
-  const startX = playerX + 10 * Math.cos(angle);
-  const startY = playerY + 10 * Math.sin(angle);
-
-  const endX = playerX + aimingLineLength * Math.cos(angle);
-  const endY = playerY + aimingLineLength * Math.sin(angle);
-
-  const gradient = ctx.createLinearGradient(startX, startY, endX, endY);
-  gradient.addColorStop(0, "rgb(255,255,255,0.5)");
-  gradient.addColorStop(1, "rgb(255,255,255,0)");
-
-  ctx.beginPath();
-  ctx.setLineDash([4, 6]);
-  ctx.moveTo(startX, startY);
-  ctx.lineTo(endX, endY);
-  ctx.strokeStyle = gradient;
-  ctx.stroke();
-  ctx.closePath();
-}
-
-function handleAddBullet(event) {
-  const currentPlayer = playersArray.find((player) => player.id === socket.id);
-  const bulletAngle = Math.atan2(
-    currentPlayer.mouseY - currentPlayer.y,
-    currentPlayer.mouseX - currentPlayer.x
-  );
-  const bulletX = currentPlayer.x + 20 * Math.cos(bulletAngle);
-  const bulletY = currentPlayer.y + 20 * Math.sin(bulletAngle);
+addEventListener("click", (event) => {
+  console.log("mouse clicked: ", event.clientX, event.clientY);
   const bullet = {
-    x: bulletX,
-    y: bulletY,
-    angle: bulletAngle,
-  };
-  currentPlayer.bullets.push(bullet);
-  socket.emit("updatePlayer", currentPlayer);
-}
-
-document.addEventListener("mousemove", (event) => {
-  const currentPlayer = playersArray.find((player) => player.id === socket.id);
-  if (currentPlayer) {
-    currentPlayer.mouseX = event.clientX;
-    currentPlayer.mouseY = event.clientY;
-
-    socket.emit("updatePlayer", currentPlayer);
+    x: event.clientX * dpi,
+    y: event.clientY * dpi,
   }
-});
-
-document.addEventListener("click", (event) => {
-  handleAddBullet(event);
+  socket.emit('frontendBullets', bullet);
 });
 
 // const aimingLineLength = canvas.width / 2;
