@@ -38,6 +38,14 @@ socket.on('updateFrontendPlayers', (backendPlayers) => {
   }
 })
 
+socket.on('updatePlayerPosition', (playerId, backendPlayers) => {
+  const player = backendPlayers[playerId];
+  if(frontendPlayers[playerId]){
+    frontendPlayers[playerId].x = player.x;
+    frontendPlayers[playerId].y = player.y;
+  }
+})
+
 socket.on('playerLeft', (playerId) => {
   delete frontendPlayers[playerId];
 });
@@ -58,6 +66,8 @@ animate();
 function drawPlayer({x, y, radius, color}) {
   
   ctx.beginPath();
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 30;
   ctx.arc(x, y, radius, 0, 2 * Math.PI, false);
   ctx.fillStyle = color; 
   ctx.fill();
@@ -72,7 +82,7 @@ function drawBullets({x, y, radius, color}) {
   ctx.closePath();
 }
 
-canvas.addEventListener("keydown", (event) => {
+document.addEventListener("keydown", (event) => {
   console.log("inside keydown event");
   const currentPlayer = frontendPlayers[socket.id];
   if(!currentPlayer) return;
