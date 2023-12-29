@@ -5,6 +5,7 @@ function validateUserDetails(req, res, next) {
     try {
       const userData = req.body;
       userSchema.parse(userData);
+      userData.active = false;
       req.validatedUserData = userData;
       next();
     } catch (error) {

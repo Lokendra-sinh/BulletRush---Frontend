@@ -9,6 +9,7 @@ import { validateUserDetails } from "./Middlewares/Register/validateUserDetails.
 import { hashUserPassword } from "./Middlewares/Register/hashUserPassword.js";
 import { addUserToDatabase } from "./Middlewares/Register/addUserToDatabase.js";
 import { createJsonToken } from "./Middlewares/Register/createJsonToken.js";
+import { emailVerification } from "./Middlewares/emailVerification.js";
 
 
 const app = express();
@@ -35,11 +36,15 @@ app.post(
   validateUserDetails,
   hashUserPassword,
   addUserToDatabase,
-  createJsonToken,
   (req, res, next) => {
     console.log("inside register route");
   }
 );
+
+app.get('/verify', emailVerification, (req, res) => {
+console.log("Email verification successful");
+
+})
 
 
 app.post("/login", )
